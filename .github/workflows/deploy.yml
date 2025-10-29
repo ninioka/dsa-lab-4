@@ -74,7 +74,7 @@ jobs:
             else
               echo "<div>Version $version_num<br>" >> index.html
             fi
-            
+          
             echo "<a href='./$version/ru/index.html'>Русская</a> | " >> index.html
             echo "<a href='./$version/en/index.html'>English</a></div>" >> index.html
           fi
