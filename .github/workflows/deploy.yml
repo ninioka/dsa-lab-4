@@ -1,0 +1,92 @@
+name: Deploy on Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Checkout gh-pages branch
+      run: |
+        git fetch origin gh-pages
+        git checkout gh-pages
+        git pull origin gh-pages
+
+    - name: Prepare version files
+      run: |
+        # Получаем версию релиза
+        VERSION="${{ github.event.release.tag_name }}"
+        if [[ ! $VERSION =~ ^v ]]; then
+          VERSION="v$VERSION"
+        fi
+        
+        # Создаем папку для версии и копируем файлы
+        mkdir -p "$VERSION"
+        cp -r *.html ru/ en/ style.css "$VERSION/" || true
+        
+        # Обновляем текущую версию в корне
+        rm -rf *.html ru en style.css 2>/dev/null || true
+        cp -r "$VERSION"/* ./
+
+    - name: Generate versions page
+      run: |
+        # Создаем HTML страницу со списком версий
+        cat > index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Лабораторная работа №4 - Все версии</title>
+            <link rel="stylesheet" href="style.css">
+        </head>
+        <body>
+            <h1>Лабораторная работа №4</h1>
+            <h2>Все версии проекта</h2>
+            
+            <nav>
+                <strong>Навигация:</strong>
+                <a href="./ru/index.html">Текущая русская версия</a> |
+                <a href="./en/index.html">Текущая английская версия</a>
+            </nav>
+
+            <h3>Доступные версии:</h3>
+        EOF
+
+        # Добавляем список версий
+        for dir in v*/; do
+          if [ -d "$dir" ]; then
+            version="${dir%/}"
+            version_num="${version#v}"
+            
+            if [ "$version" = "$VERSION" ]; then
+              echo "<div><strong>Version $version_num (текущая)</strong><br>" >> index.html
+            else
+              echo "<div>Version $version_num<br>" >> index.html
+            fi
+            
+            echo "<a href='./$version/ru/index.html'>Русская</a> | " >> index.html
+            echo "<a href='./$version/en/index.html'>English</a></div>" >> index.html
+          fi
+        done
+
+        # Закрываем HTML
+        echo "</body></html>" >> index.html
+
+    - name: Commit and deploy
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git add .
+        git commit -m "Deploy version ${{ github.event.release.tag_name }}"
+        git push origin gh-pages
